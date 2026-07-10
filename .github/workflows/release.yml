@@ -21,14 +21,12 @@ jobs:
           - os: windows-latest
             name: win
             eb: --win
-          # Two macOS runners: arm64 (Apple Silicon) and x64 (Intel). Each installs
-          # its own-arch native `sharp` binary, so each dmg gets the right one.
+          # macOS Apple Silicon (arm64). Intel (macos-13) is intentionally dropped:
+          # GitHub's Intel runners are scarce / being retired, and arm64 covers all
+          # current Macs. Re-add a `macos-13 / --mac --x64` leg if Intel is needed.
           - os: macos-14
             name: mac-arm64
             eb: --mac --arm64
-          - os: macos-13
-            name: mac-x64
-            eb: --mac --x64
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
