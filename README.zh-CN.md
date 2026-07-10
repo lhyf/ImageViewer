@@ -65,6 +65,25 @@ JPG · PNG · GIF · WebP · BMP · TIFF · AVIF 等。
 
 ---
 
+## 安装
+
+从 [Releases 页面](https://github.com/lhyf/ImageViewer/releases) 下载最新安装包。
+
+**Windows** —— 运行 `ImageViewer-Setup-*.exe`(安装版)或 `ImageViewer-Portable-*.exe`(免安装)。
+
+**macOS** —— 打开 `.dmg`,把 **ImageViewer** 拖到「应用程序」。该 app 做了 ad-hoc 临时
+签名但未做 Apple 公证(没有付费的 Apple 开发者证书),因此首次打开时 macOS 可能提示
+*「ImageViewer 已损坏,无法打开」*。这是 Gatekeeper 拦截未公证应用,并非真的损坏——
+在「终端」里清除一次下载隔离标记即可:
+
+```bash
+xattr -cr /Applications/ImageViewer.app
+```
+
+之后正常双击打开即可(清除一次后长期有效)。
+
+---
+
 ## 技术栈
 
 - **Electron** + **electron-vite** —— 跨平台桌面外壳与构建工具链。

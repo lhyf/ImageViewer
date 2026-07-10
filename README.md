@@ -71,6 +71,26 @@ JPG · PNG · GIF · WebP · BMP · TIFF · AVIF and more.
 
 ---
 
+## Install
+
+Download the latest installers from the [Releases page](https://github.com/lhyf/ImageViewer/releases).
+
+**Windows** — run `ImageViewer-Setup-*.exe` (installer) or `ImageViewer-Portable-*.exe` (no install needed).
+
+**macOS** — open the `.dmg` and drag **ImageViewer** into Applications. The app is
+ad-hoc signed but not notarized (there is no paid Apple Developer ID), so on first
+launch macOS may say *"ImageViewer is damaged and can't be opened."* That is
+Gatekeeper blocking an un-notarized app, not actual corruption — clear the download
+quarantine once in Terminal:
+
+```bash
+xattr -cr /Applications/ImageViewer.app
+```
+
+Then open it normally (it stays cleared afterwards).
+
+---
+
 ## Tech stack
 
 - **Electron** + **electron-vite** — cross-platform desktop shell and build tooling.

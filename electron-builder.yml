@@ -103,9 +103,14 @@ portable:
   artifactName: ImageViewer-Portable-${version}-${arch}.${ext}
 
 mac:
+  # Ad-hoc sign (no paid Apple Developer ID) so the arm64 app will actually run.
+  # Users still clear the download quarantine once — see README "Install" (macOS).
+  identity: '-'
+  # Do NOT list `arch` here: it overrides the CI `--arm64` / `--x64` flag and
+  # cross-builds the other arch, shipping a broken dmg with the wrong-arch native
+  # sharp binary. Arch is chosen by the flag in .github/workflows/release.yml.
   target:
     - target: dmg
-      arch: [x64, arm64]
   category: public.app-category.photography
   # icon: build/icon.icns
 

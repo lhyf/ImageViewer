@@ -53,10 +53,9 @@ jobs:
         run: npm run build
 
       - name: Package installers
-        env:
-          # No Apple Developer certificate configured — skip code signing so the
-          # unsigned dmg still builds (users right-click → Open on first launch).
-          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        # macOS is ad-hoc signed via `mac.identity: '-'` in electron-builder.yml.
+        # Do NOT set CSC_IDENTITY_AUTO_DISCOVERY=false here — it disables signing
+        # entirely and the arm64 app then reports "is damaged and can't be opened".
         run: npx electron-builder ${{ matrix.eb }} --publish never
 
       - name: Upload build artifacts
