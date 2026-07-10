@@ -5,6 +5,10 @@
   "main": "./out/main/index.js",
   "author": "Yang Fan <yangfanor@gmail.com>",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lhyf/ImageViewer.git"
+  },
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",

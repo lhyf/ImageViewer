@@ -2,6 +2,12 @@ appId: com.imageviewer.app
 productName: ImageViewer
 copyright: Copyright © 2026
 
+# The Windows executable's FileDescription — shown in the "Open with" dialog and
+# Task Manager — is derived from the package description. Pin it to the product
+# name here, without touching the human-readable description in package.json.
+extraMetadata:
+  description: ImageViewer
+
 directories:
   output: release
   buildResources: build
@@ -28,9 +34,49 @@ asarUnpack:
 
 artifactName: ImageViewer-${version}-${arch}.${ext}
 
+# Register the app as a real image handler. The NSIS installer writes a ProgId +
+# Capabilities entry per type, so Windows treats ImageViewer as a first-class
+# default instead of an ad-hoc "Open with" exe. This is what makes "set as
+# default" actually stick — notably for PNG, whose system default (Photos)
+# otherwise resists the ad-hoc override that JPG happens to accept. (Also feeds
+# CFBundleDocumentTypes on macOS.)
+fileAssociations:
+  - ext: jpg
+    name: JPEG Image
+    role: Viewer
+  - ext: jpeg
+    name: JPEG Image
+    role: Viewer
+  - ext: png
+    name: PNG Image
+    role: Viewer
+  - ext: gif
+    name: GIF Image
+    role: Viewer
+  - ext: webp
+    name: WebP Image
+    role: Viewer
+  - ext: bmp
+    name: Bitmap Image
+    role: Viewer
+  - ext: tif
+    name: TIFF Image
+    role: Viewer
+  - ext: tiff
+    name: TIFF Image
+    role: Viewer
+  - ext: avif
+    name: AVIF Image
+    role: Viewer
+  - ext: ico
+    name: Icon
+    role: Viewer
+
 win:
-  # Skip signing + rcedit (they pull in winCodeSign, whose macOS symlinks
-  # cannot be extracted without Developer Mode / elevation on Windows).
+  # Skip signing + rcedit: they pull in winCodeSign, whose macOS symlinks cannot
+  # be extracted on this Windows account without Developer Mode / elevation.
+  # Consequence: the exe keeps Electron's default icon + FileDescription locally.
+  # Build with Developer Mode ON (or on CI) to stamp the ImageViewer icon/name.
   signAndEditExecutable: false
   target:
     - target: nsis

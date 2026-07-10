@@ -10,6 +10,17 @@ import type {
 const api = {
   platform: process.platform,
 
+  app: {
+    // Path the OS launched us with ("Open with" / double-click), pulled once on boot.
+    getInitialFile: (): Promise<string | null> => ipcRenderer.invoke('app:getInitialFile'),
+    // Fired when the app is already running and the OS hands it another file.
+    onOpenFile: (cb: (path: string) => void): (() => void) => {
+      const handler = (_e: unknown, p: string): void => cb(p)
+      ipcRenderer.on('app:openFile', handler)
+      return () => ipcRenderer.removeListener('app:openFile', handler)
+    }
+  },
+
   window: {
     minimize: (): Promise<void> => ipcRenderer.invoke('window:minimize'),
     toggleMaximize: (): Promise<void> => ipcRenderer.invoke('window:toggleMaximize'),

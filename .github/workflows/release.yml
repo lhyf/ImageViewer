@@ -1,0 +1,92 @@
+name: Release
+
+# Build installers for Windows + macOS and attach them to a GitHub Release.
+# Trigger by pushing a version tag, e.g.:  git tag v0.1.0 && git push origin v0.1.0
+# Or run manually from the Actions tab (builds artifacts, no Release published).
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Windows: GitHub's runner is elevated, so winCodeSign extracts fine and
+          # rcedit can stamp the exe (icon + FileDescription = "ImageViewer") —
+          # the thing that cannot be done on a non-admin local Windows machine.
+          - os: windows-latest
+            name: win
+            eb: --win
+          # Two macOS runners: arm64 (Apple Silicon) and x64 (Intel). Each installs
+          # its own-arch native `sharp` binary, so each dmg gets the right one.
+          - os: macos-14
+            name: mac-arm64
+            eb: --mac --arm64
+          - os: macos-13
+            name: mac-x64
+            eb: --mac --x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Locally the exe stays unstamped (signAndEditExecutable: false) because a
+      # non-admin Windows account can't extract winCodeSign's macOS symlinks. CI
+      # is elevated, so drop that line to let electron-builder stamp the exe.
+      - name: Enable exe stamping (Windows)
+        if: matrix.name == 'win'
+        shell: pwsh
+        run: |
+          (Get-Content electron-builder.yml) -notmatch 'signAndEditExecutable:\s*false' |
+            Set-Content electron-builder.yml -Encoding utf8
+
+      - name: Build renderer + main
+        run: npm run build
+
+      - name: Package installers
+        env:
+          # No Apple Developer certificate configured — skip code signing so the
+          # unsigned dmg still builds (users right-click → Open on first launch).
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npx electron-builder ${{ matrix.eb }} --publish never
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: |
+            release/*.exe
+            release/*.zip
+            release/*.dmg
+          if-no-files-found: ignore
+
+  release:
+    # Publish a GitHub Release only for tag pushes (not manual runs).
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*
+          generate_release_notes: true
+          fail_on_unmatched_files: true

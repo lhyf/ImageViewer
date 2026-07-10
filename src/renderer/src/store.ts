@@ -24,6 +24,7 @@ interface AppState {
 
   openFolderDialog: () => Promise<void>
   openFilesDialog: () => Promise<void>
+  openPath: (path: string) => Promise<void>
   loadDir: (dir: string, selectPath?: string, enterViewer?: boolean) => Promise<void>
   go: (dir: string) => Promise<void>
   back: () => Promise<void>
@@ -76,6 +77,14 @@ export const useStore = create<AppState>((set, get) => ({
       await get().loadDir(dir, first, true)
       set({ history: [dir], histIndex: 0 })
     }
+  },
+
+  // Open a single image file (from the OS "open with" / double-click): scan its
+  // folder, select it, and jump straight into the viewer.
+  openPath: async (path) => {
+    const dir = dirName(path)
+    await get().loadDir(dir, path, true)
+    set({ history: [dir], histIndex: 0 })
   },
 
   loadDir: async (dir, selectPath, enterViewer = false) => {

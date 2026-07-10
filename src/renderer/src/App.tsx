@@ -26,6 +26,14 @@ export default function App(): React.JSX.Element {
     return () => document.removeEventListener('fullscreenchange', onFs)
   }, [setFullscreen])
 
+  // Open a file the OS launched us with, and any handed over while running.
+  useEffect(() => {
+    window.api.app.getInitialFile().then((p) => {
+      if (p) useStore.getState().openPath(p)
+    })
+    return window.api.app.onOpenFile((p) => useStore.getState().openPath(p))
+  }, [])
+
   const showViewer = mode === 'viewer' && images.length > 0
 
   return (
