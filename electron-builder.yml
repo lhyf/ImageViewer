@@ -1,0 +1,67 @@
+appId: com.imageviewer.app
+productName: ImageViewer
+copyright: Copyright © 2026
+
+directories:
+  output: release
+  buildResources: build
+
+# Keep everything the runtime needs (out/, prod node_modules, package.json);
+# strip source and dev-only config.
+files:
+  - '!**/.vscode/*'
+  - '!src/*'
+  - '!electron.vite.config.{js,ts,mjs,cjs}'
+  - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+  - '!{tailwind.config.js,postcss.config.js,electron-builder.yml}'
+  - '!{.eslintrc,.eslintrc.js,.prettierrc,.editorconfig,.gitignore,.npmrc}'
+  - '!README.md'
+  - '!release/**'
+  - '!release-tmp/**'
+  - '!dev*.log'
+
+# Native modules must live outside the asar so they can be loaded.
+asarUnpack:
+  - '**/*.{node,dll}'
+  - 'node_modules/sharp/**'
+  - 'node_modules/@img/**'
+
+artifactName: ImageViewer-${version}-${arch}.${ext}
+
+win:
+  # Skip signing + rcedit (they pull in winCodeSign, whose macOS symlinks
+  # cannot be extracted without Developer Mode / elevation on Windows).
+  signAndEditExecutable: false
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]
+    - target: zip
+      arch: [x64]
+  # icon: build/icon.ico
+
+nsis:
+  artifactName: ImageViewer-Setup-${version}-${arch}.${ext}
+  oneClick: false
+  perMachine: false
+  allowElevation: true
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: ImageViewer
+  installerLanguages:
+    - zh_CN
+
+portable:
+  artifactName: ImageViewer-Portable-${version}-${arch}.${ext}
+
+mac:
+  target:
+    - target: dmg
+      arch: [x64, arm64]
+  category: public.app-category.photography
+  # icon: build/icon.icns
+
+dmg:
+  title: ImageViewer ${version}

@@ -1,0 +1,102 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --app-bg: #17181b;
+  --app-surface: #202226;
+  --app-panel: #1b1c20;
+  --app-border: #2c2e33;
+  --app-hover: rgba(255, 255, 255, 0.07);
+  --app-active: rgba(255, 255, 255, 0.13);
+  --app-text: #e8eaed;
+  --app-muted: #9aa0a6;
+  --app-accent: #4a90ff;
+  --app-accent-soft: rgba(74, 144, 255, 0.16);
+  --viewer-bg: #0c0d0f;
+  --shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  color-scheme: dark;
+}
+
+:root[data-theme='light'] {
+  --app-bg: #eceef1;
+  --app-surface: #ffffff;
+  --app-panel: #f6f7f9;
+  --app-border: #e2e5e9;
+  --app-hover: rgba(0, 0, 0, 0.05);
+  --app-active: rgba(0, 0, 0, 0.1);
+  --app-text: #1f2328;
+  --app-muted: #6b7280;
+  --app-accent: #2f6bff;
+  --app-accent-soft: rgba(47, 107, 255, 0.12);
+  --viewer-bg: #23252a;
+  --shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--app-bg);
+  color: var(--app-text);
+  font-family:
+    'Segoe UI', -apple-system, BlinkMacSystemFont, 'Microsoft YaHei', 'PingFang SC', system-ui,
+    sans-serif;
+  font-size: 13px;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+img {
+  -webkit-user-drag: none;
+  user-select: none;
+}
+
+/* Draggable window regions for the frameless title bar */
+.drag-region {
+  -webkit-app-region: drag;
+}
+.no-drag {
+  -webkit-app-region: no-drag;
+}
+
+/* Thin, theme-aware scrollbars */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--app-border);
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--app-muted);
+  background-clip: content-box;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.animate-fade-in {
+  animation: fade-in 0.18s ease-out;
+}
