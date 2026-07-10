@@ -1,6 +1,6 @@
 {
   "name": "image-viewer",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A lightweight cross-platform image viewer",
   "main": "./out/main/index.js",
   "author": "Yang Fan <yangfanor@gmail.com>",
@@ -23,6 +23,8 @@
   },
   "dependencies": {
     "exifr": "^7.1.3",
+    "exiftool-vendored": "^36.0.0",
+    "heic-decode": "^2.1.0",
     "sharp": "^0.33.5"
   },
   "devDependencies": {

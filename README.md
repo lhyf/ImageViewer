@@ -24,6 +24,8 @@ bloat of an editing suite.
 ### Library (browse) mode
 
 - Folder tree on the left — quick-access shortcuts plus drives, expanded lazily.
+- **Drag & drop** a photo — or a folder — onto the window to open it and jump
+  straight into its folder.
 - Breadcrumb path with back / forward / up / refresh navigation.
 - Virtualized thumbnail grid (smooth with thousands of files); thumbnails are
   generated once and cached.
@@ -49,7 +51,10 @@ bloat of an editing suite.
 
 ### Supported formats
 
-JPG · PNG · GIF · WebP · BMP · TIFF · AVIF and more.
+JPG · PNG · GIF · WebP · BMP · TIFF · AVIF · **HEIC/HEIF** · and **camera RAW**
+(Canon CR3/CR2, Nikon NEF, Sony ARW, Fujifilm RAF, Adobe DNG, Olympus ORF,
+Panasonic RW2, and more). RAW and HEIC are decoded to a full-resolution preview
+for viewing — the app is a viewer, not a RAW editor.
 
 ---
 

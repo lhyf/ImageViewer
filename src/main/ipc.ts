@@ -7,6 +7,7 @@ import { exec } from 'child_process'
 import os from 'os'
 import sharp from 'sharp'
 import exifr from 'exifr'
+import { loadImage, imageSize, exifToolTags, needsDecode, RAW_EXTS, HEIC_EXTS } from './decode'
 import type {
   ImageItem,
   DirNode,
@@ -22,7 +23,8 @@ const isMac = process.platform === 'darwin'
 
 /** Extensions we treat as viewable images. */
 const IMAGE_EXTS = new Set([
-  'jpg', 'jpeg', 'jpe', 'png', 'gif', 'bmp', 'webp', 'avif', 'tif', 'tiff', 'ico', 'svg'
+  'jpg', 'jpeg', 'jpe', 'png', 'gif', 'bmp', 'webp', 'avif', 'tif', 'tiff', 'ico', 'svg',
+  ...RAW_EXTS, ...HEIC_EXTS
 ])
 
 function extOf(name: string): string {
@@ -224,13 +226,13 @@ async function thumbnail(path: string, size = 256): Promise<string> {
   const key = createHash('md5').update(`${path}|${await fileMtime(path)}|${size}`).digest('hex')
   const out = join(cacheDir, `${key}.jpg`)
   try {
-    return await cached(out, (tmp) =>
-      sharp(path, { failOn: 'none', animated: false })
-        .rotate()
+    return await cached(out, async (tmp) => {
+      const img = await loadImage(path)
+      await img
         .resize(size, size, { fit: 'inside', withoutEnlargement: true })
         .jpeg({ quality: 82 })
         .toFile(tmp)
-    )
+    })
   } catch {
     return path // fall back to the original if it can't be decoded
   }
@@ -241,16 +243,18 @@ async function preview(path: string, max = 3840): Promise<string> {
   const cacheDir = join(app.getPath('userData'), 'previews')
   await ensureDir(cacheDir)
   const ext = extOf(path)
-  const isJpeg = ext === 'jpg' || ext === 'jpeg'
-  const outExt = isJpeg ? 'jpg' : 'png'
+  // Photos (jpeg + RAW + HEIC) → JPEG; formats that may carry alpha → PNG.
+  const useJpeg = ext === 'jpg' || ext === 'jpeg' || RAW_EXTS.has(ext) || HEIC_EXTS.has(ext)
+  const outExt = useJpeg ? 'jpg' : 'png'
   const key = createHash('md5').update(`${path}|${await fileMtime(path)}|${max}`).digest('hex')
   const out = join(cacheDir, `${key}.${outExt}`)
   try {
-    return await cached(out, (tmp) => {
-      const pipeline = sharp(path, { failOn: 'none', limitInputPixels: false })
-        .rotate()
-        .resize(max, max, { fit: 'inside', withoutEnlargement: true })
-      return (isJpeg ? pipeline.jpeg({ quality: 88 }) : pipeline.png({ compressionLevel: 6 })).toFile(
+    return await cached(out, async (tmp) => {
+      const pipeline = (await loadImage(path)).resize(max, max, {
+        fit: 'inside',
+        withoutEnlargement: true
+      })
+      await (useJpeg ? pipeline.jpeg({ quality: 88 }) : pipeline.png({ compressionLevel: 6 })).toFile(
         tmp
       )
     })
@@ -286,30 +290,56 @@ function mapExif(raw: Record<string, unknown> | undefined): ExifInfo | undefined
   return info
 }
 
+// exiftool tags (RAW/HEIC) → ExifInfo, since exifr can't read those formats.
+function mapExifToolTags(t: Record<string, unknown> | undefined): ExifInfo | undefined {
+  if (!t) return undefined
+  const num = (v: unknown): number | undefined =>
+    typeof v === 'number' && isFinite(v) ? v : undefined
+  const str = (v: unknown): string | undefined => (v == null ? undefined : String(v))
+  const fnum = num(t.FNumber) ?? num(t.Aperture)
+  let exposure: string | undefined
+  if (typeof t.ShutterSpeed === 'string') {
+    exposure = /s$/.test(t.ShutterSpeed) ? t.ShutterSpeed : `${t.ShutterSpeed}s`
+  } else if (typeof t.ExposureTime === 'string') {
+    exposure = /s$/.test(t.ExposureTime) ? t.ExposureTime : `${t.ExposureTime}s`
+  } else if (typeof t.ExposureTime === 'number') {
+    const e = t.ExposureTime
+    exposure = e > 0 && e < 1 ? `1/${Math.round(1 / e)}s` : `${e}s`
+  }
+  return {
+    make: str(t.Make),
+    model: str(t.Model),
+    lensModel: str(t.LensModel ?? t.LensID ?? t.Lens),
+    dateTimeOriginal: t.DateTimeOriginal ? String(t.DateTimeOriginal) : undefined,
+    exposureTime: exposure,
+    fNumber: fnum ? `f/${fnum}` : undefined,
+    iso: num(t.ISO),
+    focalLength: t.FocalLength != null ? String(t.FocalLength).replace(/\s+/g, '') : undefined,
+    orientation: num(t.Orientation),
+    gpsLatitude: num(t.GPSLatitude),
+    gpsLongitude: num(t.GPSLongitude)
+  }
+}
+
 async function getMeta(path: string): Promise<ImageMeta> {
   const st = await fs.stat(path)
-  let width = 0
-  let height = 0
-  try {
-    const m = await sharp(path, { failOn: 'none' }).metadata()
-    width = m.width ?? 0
-    height = m.height ?? 0
-    // Account for rotation so displayed dimensions match orientation.
-    if (m.orientation && m.orientation >= 5) [width, height] = [height, width]
-  } catch {
-    /* ignore */
-  }
+  const ext = extOf(path)
+  const { width, height } = await imageSize(path).catch(() => ({ width: 0, height: 0 }))
   let exif: ExifInfo | undefined
-  try {
-    const raw = await exifr.parse(path, { gps: true }).catch(() => undefined)
-    exif = mapExif(raw as Record<string, unknown> | undefined)
-  } catch {
-    /* ignore */
+  if (RAW_EXTS.has(ext) || HEIC_EXTS.has(ext)) {
+    exif = mapExifToolTags(await exifToolTags(path))
+  } else {
+    try {
+      const raw = await exifr.parse(path, { gps: true }).catch(() => undefined)
+      exif = mapExif(raw as Record<string, unknown> | undefined)
+    } catch {
+      /* ignore */
+    }
   }
   return {
     path,
     name: basename(path),
-    ext: extOf(path),
+    ext,
     size: st.size,
     mtime: st.mtimeMs,
     width,
@@ -370,9 +400,11 @@ async function saveAsCopy(win: BrowserWindow | null, path: string): Promise<OpRe
   }
 }
 
-function copyImage(path: string): OpResult {
+async function copyImage(path: string): Promise<OpResult> {
   try {
-    const img = nativeImage.createFromPath(path)
+    // nativeImage can't decode RAW/HEIC — copy the generated preview instead.
+    const src = needsDecode(path) ? await preview(path) : path
+    const img = nativeImage.createFromPath(src)
     if (img.isEmpty()) return { ok: false, error: '无法读取图片' }
     clipboard.writeImage(img)
     return { ok: true }
@@ -466,6 +498,15 @@ export function registerFileHandlers(getWindow: GetWindow): void {
   ipcMain.handle('fs:parent', (_e, dir: string) => {
     const p = dirname(dir)
     return p === dir ? null : p
+  })
+  // Is a dropped path a folder or a file? (drives drag-and-drop behaviour)
+  ipcMain.handle('fs:pathKind', async (_e, p: string) => {
+    try {
+      const st = await fs.stat(p)
+      return st.isDirectory() ? 'dir' : st.isFile() ? 'file' : null
+    } catch {
+      return null
+    }
   })
 
   ipcMain.handle('img:thumbnail', (_e, path: string, size?: number) => thumbnail(path, size))

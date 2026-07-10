@@ -41,7 +41,7 @@ export default function EmptyState(): React.JSX.Element {
         </button>
       </div>
       <div className="mt-2 text-[12px]" style={{ color: 'var(--app-muted)' }}>
-        支持 JPG · PNG · GIF · WebP · BMP · TIFF · AVIF 等格式
+        支持 JPG · PNG · GIF · WebP · HEIC · RAW(CR3/NEF/ARW…) 等格式
       </div>
     </div>
   )

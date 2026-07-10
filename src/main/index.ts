@@ -3,13 +3,15 @@ import { join, resolve } from 'path'
 import { existsSync, statSync } from 'fs'
 import { pathToFileURL } from 'url'
 import { registerFileHandlers } from './ipc'
+import { endDecode } from './decode'
 
 const isMac = process.platform === 'darwin'
 const isDev = !!process.env['ELECTRON_RENDERER_URL']
 
 // Extensions we accept when the OS launches us with a file ("Open with" /
 // double-click on an associated image).
-const IMAGE_ARG_RE = /\.(jpe?g|png|gif|webp|bmp|tiff?|avif|ico|svg|heic|heif)$/i
+const IMAGE_ARG_RE =
+  /\.(jpe?g|png|gif|webp|bmp|tiff?|avif|ico|svg|heic|heif|hif|cr[23]|crw|nef|nrw|arw|sr2|srf|raf|dng|orf|rw2|pef|srw|raw|rwl|3fr|iiq|x3f|mrw|dcr|kdc|erf|mef|mos)$/i
 
 // The custom scheme must be registered as privileged before the app is ready so
 // that <img src="media://..."> is treated as a secure, fetch-capable source.
@@ -175,4 +177,9 @@ if (!gotSingleInstanceLock) {
 
 app.on('window-all-closed', () => {
   if (!isMac) app.quit()
+})
+
+// Shut the persistent exiftool process (used for RAW/HEIC) down cleanly.
+app.on('will-quit', () => {
+  void endDecode()
 })

@@ -25,6 +25,7 @@ interface AppState {
   openFolderDialog: () => Promise<void>
   openFilesDialog: () => Promise<void>
   openPath: (path: string) => Promise<void>
+  openDropped: (path: string) => Promise<void>
   loadDir: (dir: string, selectPath?: string, enterViewer?: boolean) => Promise<void>
   go: (dir: string) => Promise<void>
   back: () => Promise<void>
@@ -85,6 +86,18 @@ export const useStore = create<AppState>((set, get) => ({
     const dir = dirName(path)
     await get().loadDir(dir, path, true)
     set({ history: [dir], histIndex: 0 })
+  },
+
+  // A dropped item: a folder opens in browse mode, an image opens in the viewer
+  // (its whole folder loads either way, just like double-clicking a file).
+  openDropped: async (path) => {
+    const kind = await window.api.fs.pathKind(path)
+    if (kind === 'dir') {
+      await get().go(path)
+      set({ mode: 'browser' })
+    } else {
+      await get().openPath(path)
+    }
   },
 
   loadDir: async (dir, selectPath, enterViewer = false) => {

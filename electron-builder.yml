@@ -26,11 +26,19 @@ files:
   - '!release-tmp/**'
   - '!dev*.log'
 
-# Native modules must live outside the asar so they can be loaded.
+# Native modules + spawned binaries + wasm must live outside the asar.
 asarUnpack:
   - '**/*.{node,dll}'
   - 'node_modules/sharp/**'
   - 'node_modules/@img/**'
+  # exiftool (RAW preview + metadata) — spawns a real binary at runtime. The
+  # platform binary can be hoisted top-level or nested under exiftool-vendored's
+  # own node_modules, so unpack the whole tree plus both possible locations.
+  - 'node_modules/exiftool-vendored/**'
+  - 'node_modules/exiftool-vendored.exe/**'
+  - 'node_modules/exiftool-vendored.pl/**'
+  # libheif (HEIC decode) loads its .wasm from disk.
+  - 'node_modules/libheif-js/**'
 
 artifactName: ImageViewer-${version}-${arch}.${ext}
 
@@ -70,6 +78,36 @@ fileAssociations:
     role: Viewer
   - ext: ico
     name: Icon
+    role: Viewer
+  - ext: heic
+    name: HEIC Image
+    role: Viewer
+  - ext: heif
+    name: HEIF Image
+    role: Viewer
+  - ext: cr3
+    name: Canon Raw
+    role: Viewer
+  - ext: cr2
+    name: Canon Raw
+    role: Viewer
+  - ext: nef
+    name: Nikon Raw
+    role: Viewer
+  - ext: arw
+    name: Sony Raw
+    role: Viewer
+  - ext: dng
+    name: Digital Negative
+    role: Viewer
+  - ext: raf
+    name: Fujifilm Raw
+    role: Viewer
+  - ext: orf
+    name: Olympus Raw
+    role: Viewer
+  - ext: rw2
+    name: Panasonic Raw
     role: Viewer
 
 win:

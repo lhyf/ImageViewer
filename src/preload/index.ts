@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type {
   ScanResult,
   DirNode,
@@ -9,6 +9,10 @@ import type {
 
 const api = {
   platform: process.platform,
+
+  // Resolve the absolute path of a dropped/selected File (Electron 33 removed
+  // File.path, so this must go through webUtils).
+  getPathForFile: (file: File): string => webUtils.getPathForFile(file),
 
   app: {
     // Path the OS launched us with ("Open with" / double-click), pulled once on boot.
@@ -43,7 +47,9 @@ const api = {
     treeRoots: (): Promise<DirNode[]> => ipcRenderer.invoke('fs:treeRoots'),
     childDirs: (dir: string): Promise<DirNode[]> => ipcRenderer.invoke('fs:childDirs', dir),
     quickAccess: (): Promise<DirNode[]> => ipcRenderer.invoke('fs:quickAccess'),
-    parent: (dir: string): Promise<string | null> => ipcRenderer.invoke('fs:parent', dir)
+    parent: (dir: string): Promise<string | null> => ipcRenderer.invoke('fs:parent', dir),
+    pathKind: (path: string): Promise<'dir' | 'file' | null> =>
+      ipcRenderer.invoke('fs:pathKind', path)
   },
 
   image: {
