@@ -53,8 +53,17 @@ function focusMainWindow(): void {
  * straight away; otherwise we stash it and let the renderer pull it on boot.
  */
 function openFileInRenderer(p: string): void {
-  const wc = mainWindow?.webContents
-  if (mainWindow && wc && !wc.isLoading()) {
+  // No window yet (e.g. macOS: the window was closed but the app is still
+  // running). Open one and let the renderer pull the pending file on boot —
+  // without this the image only appeared after the user clicked the dock icon.
+  if (!mainWindow) {
+    pendingFile = p
+    createWindow()
+    if (isMac) app.focus({ steal: true })
+    return
+  }
+  const wc = mainWindow.webContents
+  if (!wc.isLoading()) {
     wc.send('app:openFile', p)
     focusMainWindow()
   } else {

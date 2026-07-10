@@ -157,26 +157,51 @@ async function ensureDir(dir: string): Promise<void> {
   await fs.mkdir(dir, { recursive: true })
 }
 
-// Cap how many sharp jobs run at once so a big folder (or an old slider spam)
-// can't peg every core and freeze folder navigation. Each sharp op is also kept
-// single-threaded, so at most GEN_LIMIT cores are busy generating images.
+// Generation runs on TWO independent concurrency lanes so that a full-screen
+// PREVIEW (the image the user is actually staring at) never has to wait behind
+// a backlog of THUMBNAIL jobs. They used to share one FIFO queue, so opening a
+// big folder of RAW/JPEG files left the main image spinning until every visible
+// thumbnail had finished generating. Each sharp op is kept single-threaded
+// (concurrency 1) so at most (thumb + preview) lane slots are busy at once.
 sharp.concurrency(1)
-const GEN_LIMIT = Math.max(2, Math.min(4, (os.cpus().length || 4) - 2))
-let genActive = 0
-const genQueue: Array<() => void> = []
-function acquireGen(): Promise<void> {
-  if (genActive < GEN_LIMIT) {
-    genActive++
-    return Promise.resolve()
+
+interface Lane {
+  run<T>(task: () => Promise<T>): Promise<T>
+}
+function makeLane(limit: number): Lane {
+  let active = 0
+  const waiters: Array<() => void> = []
+  const acquire = (): Promise<void> => {
+    if (active < limit) {
+      active++
+      return Promise.resolve()
+    }
+    return new Promise<void>((resolve) => waiters.push(resolve)).then(() => {
+      active++
+    })
   }
-  return new Promise<void>((resolve) => genQueue.push(resolve)).then(() => {
-    genActive++
-  })
+  const release = (): void => {
+    active--
+    waiters.shift()?.()
+  }
+  return {
+    async run(task) {
+      await acquire()
+      try {
+        return await task()
+      } finally {
+        release()
+      }
+    }
+  }
 }
-function releaseGen(): void {
-  genActive--
-  genQueue.shift()?.()
-}
+
+const cpuBudget = Math.max(2, Math.min(4, (os.cpus().length || 4) - 2))
+// Background thumbnails get the bigger share; previews get a small dedicated
+// lane so the current (and neighbouring) images always have a free slot to
+// start on immediately, independent of how many thumbnails are queued.
+const thumbLane = makeLane(cpuBudget)
+const previewLane = makeLane(2)
 
 // Coalesce concurrent generation of the same cache file and write atomically
 // (temp file + rename) so a reader never sees a half-written image — which was
@@ -184,7 +209,11 @@ function releaseGen(): void {
 let tmpCounter = 0
 const inflight = new Map<string, Promise<string>>()
 
-function cached(out: string, produce: (tmpPath: string) => Promise<unknown>): Promise<string> {
+function cached(
+  out: string,
+  lane: Lane,
+  produce: (tmpPath: string) => Promise<unknown>
+): Promise<string> {
   const existing = inflight.get(out)
   if (existing) return existing
   const task = (async () => {
@@ -195,12 +224,7 @@ function cached(out: string, produce: (tmpPath: string) => Promise<unknown>): Pr
       /* generate */
     }
     const tmp = `${out}.${process.pid}.${tmpCounter++}.tmp`
-    await acquireGen()
-    try {
-      await produce(tmp)
-    } finally {
-      releaseGen()
-    }
+    await lane.run(() => produce(tmp))
     await fs.rename(tmp, out).catch(async (err) => {
       // A concurrent producer may have won the rename; tolerate that.
       await fs.unlink(tmp).catch(() => {})
@@ -226,7 +250,7 @@ async function thumbnail(path: string, size = 256): Promise<string> {
   const key = createHash('md5').update(`${path}|${await fileMtime(path)}|${size}`).digest('hex')
   const out = join(cacheDir, `${key}.jpg`)
   try {
-    return await cached(out, async (tmp) => {
+    return await cached(out, thumbLane, async (tmp) => {
       const img = await loadImage(path)
       await img
         .resize(size, size, { fit: 'inside', withoutEnlargement: true })
@@ -249,7 +273,7 @@ async function preview(path: string, max = 3840): Promise<string> {
   const key = createHash('md5').update(`${path}|${await fileMtime(path)}|${max}`).digest('hex')
   const out = join(cacheDir, `${key}.${outExt}`)
   try {
-    return await cached(out, async (tmp) => {
+    return await cached(out, previewLane, async (tmp) => {
       const pipeline = (await loadImage(path)).resize(max, max, {
         fit: 'inside',
         withoutEnlargement: true

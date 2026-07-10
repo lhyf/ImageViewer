@@ -172,8 +172,10 @@ export default function Viewer(): React.JSX.Element {
     fitFillRef.current = false
     setT({ scale: 1, tx: 0, ty: 0, rot: 0 })
 
-    // Cheap placeholder immediately (thumbnails are small and mostly cached).
-    window.api.image.thumbnail(item.path, 256).then((p) => alive && setPlaceholder(mediaUrl(p)))
+    // Cheap placeholder immediately. Use the SAME size the browser grid caches
+    // (384) so opening a photo you already saw in the grid is an instant cache
+    // hit — the blurred image shows at once instead of regenerating.
+    window.api.image.thumbnail(item.path, 384).then((p) => alive && setPlaceholder(mediaUrl(p)))
 
     // Defer the expensive preview / meta so images you scrub straight past don't
     // flood sharp — only the image you settle on gets a full preview generated.

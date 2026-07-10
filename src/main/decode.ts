@@ -1,5 +1,6 @@
 import { promises as fs } from 'fs'
 import { extname } from 'path'
+import { cpus } from 'os'
 import sharp from 'sharp'
 
 // ---------------------------------------------------------------------------
@@ -52,7 +53,13 @@ let exiftoolInst: any = null
 async function exif(): Promise<any> {
   if (!exiftoolInst) {
     const mod = await import('exiftool-vendored')
-    exiftoolInst = mod.exiftool
+    // A dedicated instance with several worker processes. The default singleton
+    // runs ONE exiftool process, which serialised every RAW embedded-JPEG
+    // extraction — so a full-screen preview had to wait behind every thumbnail's
+    // extraction in a big RAW folder. Parallel procs (and no spawn back-off) let
+    // the preview's read run right away alongside the thumbnails'.
+    const procs = Math.max(2, Math.min(4, (cpus().length || 4) - 2))
+    exiftoolInst = new mod.ExifTool({ maxProcs: procs, minDelayBetweenSpawnMillis: 0 })
   }
   return exiftoolInst
 }
