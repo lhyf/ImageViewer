@@ -269,6 +269,9 @@ export default function Viewer(): React.JSX.Element {
           doDelete()
           break
         case 'Escape':
+          // During a slideshow, let the slideshow effect handle Escape (stop +
+          // leave fullscreen); don't fall through to backToBrowser.
+          if (useUI.getState().slideshow) break
           if (document.fullscreenElement) document.exitFullscreen()
           else backToBrowser()
           break
@@ -282,7 +285,10 @@ export default function Viewer(): React.JSX.Element {
     return () => window.removeEventListener('keydown', onKey)
   }, [next, prev, zoomAt, applyFit, actualSize, doDelete, backToBrowser, toggleFullscreen])
 
-  // Slideshow: auto-advance, fullscreen, chrome hidden; any key stops it.
+  // Slideshow: auto-advance in fullscreen; any key OR leaving fullscreen stops
+  // it. Leaving fullscreen is the reliable stop signal: Chromium swallows the
+  // Esc keydown that exits fullscreen, so a keydown listener alone left the
+  // slideshow running after it had already dropped out of fullscreen.
   useEffect(() => {
     if (!slideshow) return
     document.documentElement.requestFullscreen?.().catch(() => {})
@@ -291,10 +297,15 @@ export default function Viewer(): React.JSX.Element {
       setSlideshow(false)
       if (document.fullscreenElement) document.exitFullscreen().catch(() => {})
     }
+    const onFsChange = (): void => {
+      if (!document.fullscreenElement) setSlideshow(false)
+    }
     window.addEventListener('keydown', stop)
+    document.addEventListener('fullscreenchange', onFsChange)
     return () => {
       clearInterval(id)
       window.removeEventListener('keydown', stop)
+      document.removeEventListener('fullscreenchange', onFsChange)
     }
   }, [slideshow, setSlideshow])
 
