@@ -1,6 +1,6 @@
 {
   "name": "image-viewer",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "A lightweight cross-platform image viewer",
   "main": "./out/main/index.js",
   "author": "Yang Fan <yangfanor@gmail.com>",
