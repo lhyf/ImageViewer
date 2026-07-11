@@ -55,6 +55,9 @@ fileAssociations:
   - ext: jpeg
     name: JPEG Image
     role: Viewer
+  - ext: jfif
+    name: JPEG Image
+    role: Viewer
   - ext: png
     name: PNG Image
     role: Viewer

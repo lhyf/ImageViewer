@@ -23,7 +23,7 @@ const isMac = process.platform === 'darwin'
 
 /** Extensions we treat as viewable images. */
 const IMAGE_EXTS = new Set([
-  'jpg', 'jpeg', 'jpe', 'png', 'gif', 'bmp', 'webp', 'avif', 'tif', 'tiff', 'ico', 'svg',
+  'jpg', 'jpeg', 'jpe', 'jfif', 'png', 'gif', 'bmp', 'webp', 'avif', 'tif', 'tiff', 'ico', 'svg',
   ...RAW_EXTS, ...HEIC_EXTS
 ])
 
@@ -262,13 +262,57 @@ async function thumbnail(path: string, size = 256): Promise<string> {
   }
 }
 
+/** A multi-frame GIF / animated WebP that should play rather than freeze. */
+async function isAnimated(path: string): Promise<boolean> {
+  const ext = extOf(path)
+  if (ext === 'gif') {
+    // libvips reports the frame count as `pages` for GIF.
+    try {
+      const m = await sharp(path, { animated: true }).metadata()
+      return (m.pages ?? 1) > 1
+    } catch {
+      return false
+    }
+  }
+  if (ext === 'webp') {
+    // Read the RIFF/VP8X header directly: an animated WebP has an extended
+    // (VP8X) header whose flags byte sets the animation bit (0x02). This is
+    // authoritative and avoids sharp's flaky `pages` reporting for WebP.
+    try {
+      const fd = await fs.open(path, 'r')
+      try {
+        const buf = Buffer.alloc(21)
+        await fd.read(buf, 0, 21, 0)
+        return (
+          buf.toString('ascii', 0, 4) === 'RIFF' &&
+          buf.toString('ascii', 8, 12) === 'WEBP' &&
+          buf.toString('ascii', 12, 16) === 'VP8X' &&
+          (buf[20] & 0x02) !== 0
+        )
+      } finally {
+        await fd.close()
+      }
+    } catch {
+      return false
+    }
+  }
+  return false
+}
+
 // A downscaled, EXIF-oriented preview for fast display of huge camera photos.
 async function preview(path: string, max = 3840): Promise<string> {
+  // Animated images must keep playing: hand the ORIGINAL file straight to the
+  // renderer's <img>, which Chromium animates natively. A downscaled still would
+  // freeze GIFs / animated WebP on their first frame.
+  if (await isAnimated(path)) return path
+
   const cacheDir = join(app.getPath('userData'), 'previews')
   await ensureDir(cacheDir)
   const ext = extOf(path)
   // Photos (jpeg + RAW + HEIC) → JPEG; formats that may carry alpha → PNG.
-  const useJpeg = ext === 'jpg' || ext === 'jpeg' || RAW_EXTS.has(ext) || HEIC_EXTS.has(ext)
+  const useJpeg =
+    ext === 'jpg' || ext === 'jpeg' || ext === 'jpe' || ext === 'jfif' ||
+    RAW_EXTS.has(ext) || HEIC_EXTS.has(ext)
   const outExt = useJpeg ? 'jpg' : 'png'
   const key = createHash('md5').update(`${path}|${await fileMtime(path)}|${max}`).digest('hex')
   const out = join(cacheDir, `${key}.${outExt}`)

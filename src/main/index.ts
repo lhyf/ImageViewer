@@ -11,7 +11,7 @@ const isDev = !!process.env['ELECTRON_RENDERER_URL']
 // Extensions we accept when the OS launches us with a file ("Open with" /
 // double-click on an associated image).
 const IMAGE_ARG_RE =
-  /\.(jpe?g|png|gif|webp|bmp|tiff?|avif|ico|svg|heic|heif|hif|cr[23]|crw|nef|nrw|arw|sr2|srf|raf|dng|orf|rw2|pef|srw|raw|rwl|3fr|iiq|x3f|mrw|dcr|kdc|erf|mef|mos)$/i
+  /\.(jpe?g|jpe|jfif|png|gif|webp|bmp|tiff?|avif|ico|svg|heic|heif|hif|cr[23]|crw|nef|nrw|arw|sr2|srf|raf|dng|orf|rw2|pef|srw|raw|rwl|3fr|iiq|x3f|mrw|dcr|kdc|erf|mef|mos)$/i
 
 // The custom scheme must be registered as privileged before the app is ready so
 // that <img src="media://..."> is treated as a secure, fetch-capable source.
