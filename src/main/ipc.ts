@@ -579,6 +579,9 @@ export function registerFileHandlers(getWindow: GetWindow): void {
 
   ipcMain.handle('img:thumbnail', (_e, path: string, size?: number) => thumbnail(path, size))
   ipcMain.handle('img:preview', (_e, path: string, max?: number) => preview(path, max))
+  // Just the display dimensions — cheap (header/EXIF, no decode), used to size
+  // the viewer placeholder before the full preview arrives.
+  ipcMain.handle('img:size', (_e, path: string) => imageSize(path))
   ipcMain.handle('img:meta', (_e, path: string) => getMeta(path))
 
   ipcMain.handle('op:trash', (_e, path: string) => trashItem(path))

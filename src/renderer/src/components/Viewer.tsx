@@ -177,12 +177,16 @@ export default function Viewer(): React.JSX.Element {
     // hit — the blurred image shows at once instead of regenerating.
     window.api.image.thumbnail(item.path, 384).then((p) => alive && setPlaceholder(mediaUrl(p)))
 
-    // Defer the expensive preview / meta so images you scrub straight past don't
-    // flood sharp — only the image you settle on gets a full preview generated.
+    // Fetch the real dimensions right away (cheap — header/EXIF only, no full
+    // decode). The placeholder is sized from these so a small image never flashes
+    // blown-up-to-fill before snapping to its true (<=100%) size.
+    window.api.image.size(item.path).then((s) => alive && setOrig({ w: s.width, h: s.height }))
+
+    // Defer the expensive preview so images you scrub straight past don't flood
+    // sharp — only the image you settle on gets a full preview generated.
     const timer = setTimeout(() => {
       if (!alive) return
       window.api.image.preview(item.path).then((p) => alive && setMainSrc(mediaUrl(p)))
-      window.api.image.meta(item.path).then((m) => alive && setOrig({ w: m.width, h: m.height }))
       ;[index - 1, index + 1].forEach((i) => {
         const im = images[i]
         if (!im) return
@@ -363,6 +367,9 @@ export default function Viewer(): React.JSX.Element {
   const zoomPct =
     orig && dispNat ? Math.round(t.scale * (dispNat.w / orig.w) * 100) : Math.round(t.scale * 100)
   const transform = `translate(-50%, -50%) translate(${t.tx}px, ${t.ty}px) rotate(${t.rot}deg) scale(${t.scale})`
+  // Draw the placeholder at exactly where the full image will settle (fit,
+  // capped at 100%) so switching to a small image doesn't flash oversized.
+  const phFit = orig ? Math.min(rawFit(orig, 0, stageSize.width, stageSize.height), 1) : 1
 
   return (
     <div
@@ -396,18 +403,23 @@ export default function Viewer(): React.JSX.Element {
           </div>
         ) : (
           <>
-            {!placeholder && !loaded && (
+            {!loaded && !(placeholder && orig) && (
               <div className="absolute inset-0 flex items-center justify-center">
                 <Loader2 size={30} className="animate-spin" style={{ color: 'rgba(255,255,255,.5)' }} />
               </div>
             )}
-            {placeholder && !loaded && (
+            {placeholder && orig && !loaded && (
               <img
                 src={placeholder}
                 alt=""
                 draggable={false}
-                className="absolute inset-0 h-full w-full select-none object-contain"
-                style={{ filter: 'blur(6px)', transform: 'scale(1.02)' }}
+                className="absolute left-1/2 top-1/2 select-none"
+                style={{
+                  width: orig.w * phFit,
+                  height: orig.h * phFit,
+                  transform: 'translate(-50%, -50%) scale(1.02)',
+                  filter: 'blur(6px)'
+                }}
               />
             )}
             {mainSrc && (

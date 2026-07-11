@@ -57,6 +57,8 @@ const api = {
       ipcRenderer.invoke('img:thumbnail', path, size),
     preview: (path: string, max?: number): Promise<string> =>
       ipcRenderer.invoke('img:preview', path, max),
+    size: (path: string): Promise<{ width: number; height: number }> =>
+      ipcRenderer.invoke('img:size', path),
     meta: (path: string): Promise<ImageMeta> => ipcRenderer.invoke('img:meta', path)
   },
 
