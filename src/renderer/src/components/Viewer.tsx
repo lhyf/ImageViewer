@@ -345,20 +345,51 @@ export default function Viewer(): React.JSX.Element {
   }
 
   // ----- chrome auto-hide -----
+  // Fullscreen: any mouse movement reveals the chrome, which then fades after a
+  // beat. Windowed: the chrome only appears while the cursor is down in the
+  // bottom strip (where the toolbar + filmstrip live) and hides shortly after
+  // the cursor leaves it — so ordinary mousing over the image never pops it up.
+  const BOTTOM_ZONE = 170
+  const FS_DELAY = 1000
+  const WIN_DELAY = 700
   const hideTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const overChrome = useRef(false)
-  const scheduleHide = useCallback(() => {
+  const inZone = useRef(false)
+  const scheduleHide = useCallback((delay: number) => {
     clearTimeout(hideTimer.current)
     hideTimer.current = setTimeout(() => {
       if (!overChrome.current && !drag.current) setChromeVisible(false)
-    }, 2600)
+    }, delay)
   }, [])
-  const poke = useCallback(() => {
-    setChromeVisible(true)
-    scheduleHide()
+  const onContainerMove = useCallback(
+    (e: React.MouseEvent): void => {
+      if (useUI.getState().fullscreen) {
+        setChromeVisible(true)
+        scheduleHide(FS_DELAY)
+        return
+      }
+      const rect = e.currentTarget.getBoundingClientRect()
+      const nowInZone = e.clientY >= rect.bottom - BOTTOM_ZONE
+      if (nowInZone) {
+        inZone.current = true
+        clearTimeout(hideTimer.current)
+        setChromeVisible(true)
+      } else if (inZone.current) {
+        // Cursor just left the bottom strip — start the countdown once.
+        inZone.current = false
+        scheduleHide(WIN_DELAY)
+      }
+    },
+    [scheduleHide]
+  )
+  const onContainerLeave = useCallback((): void => {
+    inZone.current = false
+    if (!overChrome.current) scheduleHide(useUI.getState().fullscreen ? FS_DELAY : WIN_DELAY)
   }, [scheduleHide])
   useEffect(() => {
-    scheduleHide()
+    // Brief initial reveal for discoverability, then it fades to its resting
+    // (hidden) state; thereafter it's summoned by the bottom strip.
+    scheduleHide(useUI.getState().fullscreen ? FS_DELAY : WIN_DELAY)
     return () => clearTimeout(hideTimer.current)
   }, [scheduleHide])
 
@@ -370,12 +401,19 @@ export default function Viewer(): React.JSX.Element {
   // Draw the placeholder at exactly where the full image will settle (fit,
   // capped at 100%) so switching to a small image doesn't flash oversized.
   const phFit = orig ? Math.min(rawFit(orig, 0, stageSize.width, stageSize.height), 1) : 1
+  // Only hide the cursor in fullscreen; windowed keeps it, since the chrome now
+  // rests hidden and we don't want the pointer vanishing over the image.
+  const hideCursor = fullscreen && !chromeVisible
+  // Windowed: the arrows stay put — they're a primary way to page through, so
+  // they don't ride the bottom chrome's auto-hide. Fullscreen: they fade with it.
+  const arrowsVisible = !fullscreen || chromeVisible
 
   return (
     <div
       className="relative h-full w-full overflow-hidden"
-      style={{ background: 'var(--viewer-bg)', cursor: chromeVisible ? 'default' : 'none' }}
-      onMouseMove={poke}
+      style={{ background: 'var(--viewer-bg)', cursor: hideCursor ? 'none' : 'default' }}
+      onMouseMove={onContainerMove}
+      onMouseLeave={onContainerLeave}
     >
       {/* Interaction layer (image + pan/zoom). Sibling of the chrome, so toolbar
           clicks never bubble into the pan/double-click handlers. */}
@@ -388,7 +426,7 @@ export default function Viewer(): React.JSX.Element {
           e.preventDefault()
           openMenu(e.clientX, e.clientY, buildMenu(item, index))
         }}
-        style={{ cursor: chromeVisible ? 'grab' : 'none' }}
+        style={{ cursor: hideCursor ? 'none' : 'grab' }}
       >
         {error ? (
           <div className="flex h-full flex-col items-center justify-center gap-3 text-white/60">
@@ -447,21 +485,24 @@ export default function Viewer(): React.JSX.Element {
         )}
       </div>
 
-      {/* Prev / next (fade with the chrome) */}
+      {/* Prev / next. Pointer-events track opacity so a faded-out arrow is never
+          invisibly clickable. */}
       {images.length > 1 && (
         <div
           className="pointer-events-none absolute inset-0 transition-opacity duration-200"
-          style={{ opacity: chromeVisible ? 1 : 0 }}
+          style={{ opacity: arrowsVisible ? 1 : 0 }}
         >
           <button
             onClick={prev}
-            className="pointer-events-auto absolute left-0 top-1/2 ml-2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white hover:bg-black/60"
+            style={{ pointerEvents: arrowsVisible ? 'auto' : 'none' }}
+            className="absolute left-0 top-1/2 ml-2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white hover:bg-black/60"
           >
             <ChevronLeft size={22} />
           </button>
           <button
             onClick={next}
-            className="pointer-events-auto absolute right-0 top-1/2 mr-2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white hover:bg-black/60"
+            style={{ pointerEvents: arrowsVisible ? 'auto' : 'none' }}
+            className="absolute right-0 top-1/2 mr-2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white hover:bg-black/60"
           >
             <ChevronRight size={22} />
           </button>
@@ -478,12 +519,13 @@ export default function Viewer(): React.JSX.Element {
         }}
         onMouseEnter={() => {
           overChrome.current = true
+          inZone.current = true
           setChromeVisible(true)
           clearTimeout(hideTimer.current)
         }}
         onMouseLeave={() => {
           overChrome.current = false
-          scheduleHide()
+          scheduleHide(useUI.getState().fullscreen ? FS_DELAY : WIN_DELAY)
         }}
       >
         <div
