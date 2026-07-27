@@ -521,16 +521,45 @@ function setWallpaper(path: string): OpResult {
   }
 }
 
-function printImage(path: string): OpResult {
+// Formats Chromium can paint straight into an <img>. Anything else (RAW / HEIC
+// / TIFF) has to go through the decoded preview first, or it prints blank.
+const PRINTABLE_DIRECT = new Set([
+  'jpg', 'jpeg', 'jpe', 'jfif', 'png', 'gif', 'bmp', 'webp', 'avif', 'ico', 'svg'
+])
+
+async function printImage(path: string): Promise<OpResult> {
   try {
+    const src = PRINTABLE_DIRECT.has(extOf(path)) ? path : await preview(path)
+
+    // Load the print document from a real temp file rather than a data: URL: a
+    // file:// document is allowed to load its file:// <img>, whereas a data:
+    // document is blocked from reading local files — which was leaving the old
+    // implementation printing a blank page. Print CSS fits the image to one page.
+    const html =
+      `<!doctype html><meta charset="utf-8"><style>` +
+      `@page{margin:10mm}` +
+      `html,body{margin:0;padding:0;height:100%}` +
+      `body{display:flex;align-items:center;justify-content:center}` +
+      `img{max-width:100%;max-height:100vh;object-fit:contain;page-break-inside:avoid}` +
+      `</style><img src="${pathToFileURL(src).toString()}">`
+    const htmlPath = join(
+      app.getPath('temp'),
+      `iv-print-${createHash('md5').update(src).digest('hex')}-${Date.now()}.html`
+    )
+    await fs.writeFile(htmlPath, html, 'utf8')
+
     const win = new BrowserWindow({ show: false, webPreferences: { sandbox: true } })
-    const url = `data:text/html,${encodeURIComponent(
-      `<html><body style="margin:0"><img src="${pathToFileURL(path)}" style="max-width:100%"/></body></html>`
-    )}`
-    win.loadURL(url)
+    const cleanup = (): void => {
+      if (!win.isDestroyed()) win.close()
+      fs.unlink(htmlPath).catch(() => {})
+    }
+    // did-finish-load fires after the <img> has loaded (the load event waits on
+    // images), so the page is ready to print by the time we get here.
     win.webContents.once('did-finish-load', () => {
-      win.webContents.print({ silent: false }, () => win.close())
+      win.webContents.print({ silent: false }, () => cleanup())
     })
+    win.webContents.once('did-fail-load', () => cleanup())
+    win.loadFile(htmlPath)
     return { ok: true }
   } catch (err) {
     return { ok: false, error: String(err) }

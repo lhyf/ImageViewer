@@ -11,6 +11,7 @@ import {
   Maximize,
   Expand,
   Shrink,
+  Printer,
   ImageOff,
   Loader2
 } from 'lucide-react'
@@ -268,6 +269,17 @@ export default function Viewer(): React.JSX.Element {
           break
         case '1':
           actualSize()
+          break
+        case 'p':
+        case 'P':
+          // Ctrl/Cmd+P prints the current image. (Win+P is an OS-reserved
+          // display shortcut and can't be intercepted, so we use Ctrl+P.)
+          if (e.ctrlKey || e.metaKey) {
+            e.preventDefault()
+            const s = useStore.getState()
+            const cur = s.images[s.index]
+            if (cur) window.api.ops.print(cur.path)
+          }
           break
         case 'Delete':
           doDelete()
@@ -572,6 +584,11 @@ export default function Viewer(): React.JSX.Element {
             icon={fullscreen ? <Shrink size={17} /> : <Expand size={17} />}
             title="全屏"
             onClick={toggleFullscreen}
+          />
+          <ToolBtn
+            icon={<Printer size={17} />}
+            title={`打印 (${window.api.platform === 'darwin' ? '⌘' : 'Ctrl+'}P)`}
+            onClick={() => window.api.ops.print(item.path)}
           />
           <ToolBtn icon={<Trash2 size={17} />} title="删除" danger onClick={doDelete} />
           <ToolBtn icon={<LayoutGrid size={17} />} title="管理" onClick={backToBrowser} />

@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { FixedSizeGrid as Grid } from 'react-window'
 import type { GridChildComponentProps } from 'react-window'
 import type { ImageItem } from '@shared/types'
@@ -43,16 +44,35 @@ function Cell({
 
 export default function ThumbGrid(props: ThumbGridProps): React.JSX.Element {
   const [ref, { width, height }] = useElementSize<HTMLDivElement>()
+  const gridRef = useRef<Grid>(null)
   const cellW = props.size + 28
   const cellH = props.size + 48
   const columns = Math.max(1, Math.floor(width / cellW))
   const rows = Math.ceil(props.items.length / columns)
   const data: CellData = { ...props, columns }
 
+  // Bring the selected image into view. This matters most when coming back from
+  // the viewer: App unmounts the browser while viewing, so the grid remounts
+  // with its scroll reset to the top and the image you were just on would
+  // otherwise be off-screen. `align: 'smart'` leaves an already-visible cell put
+  // (so clicking a thumbnail never yanks the scroll) and centers a far-away one.
+  const { selectedPath, items } = props
+  useEffect(() => {
+    if (!selectedPath) return
+    const idx = items.findIndex((im) => im.path === selectedPath)
+    if (idx < 0) return
+    gridRef.current?.scrollToItem({
+      rowIndex: Math.floor(idx / columns),
+      columnIndex: idx % columns,
+      align: 'smart'
+    })
+  }, [selectedPath, items, columns])
+
   return (
     <div ref={ref} className="h-full w-full">
       {width > 0 && height > 0 && (
         <Grid
+          ref={gridRef}
           className="thumb-grid"
           columnCount={columns}
           rowCount={rows}
