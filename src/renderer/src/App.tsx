@@ -17,9 +17,11 @@ export default function App(): React.JSX.Element {
   const fullscreen = useUI((s) => s.fullscreen)
   const setFullscreen = useUI((s) => s.setFullscreen)
   const [dragActive, setDragActive] = useState(false)
+  const [booted, setBooted] = useState(false)
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
+    window.api.app.setTheme(theme)
   }, [theme])
 
   useEffect(() => {
@@ -28,11 +30,14 @@ export default function App(): React.JSX.Element {
     return () => document.removeEventListener('fullscreenchange', onFs)
   }, [setFullscreen])
 
-  // Open a file the OS launched us with, and any handed over while running.
+  // Open a file the OS launched us with, and any handed over while running. The
+  // UI below the title bar waits for the launch file's folder, so a double-
+  // clicked image doesn't flash the empty start screen before the viewer.
   useEffect(() => {
-    window.api.app.getInitialFile().then((p) => {
-      if (p) useStore.getState().openPath(p)
-    })
+    window.api.app
+      .getInitialFile()
+      .then((p) => (p ? useStore.getState().openPath(p) : undefined))
+      .finally(() => setBooted(true))
     return window.api.app.onOpenFile((p) => useStore.getState().openPath(p))
   }, [])
 
@@ -72,7 +77,9 @@ export default function App(): React.JSX.Element {
   return (
     <div className="flex h-full flex-col">
       {!fullscreen && <TitleBar />}
-      <div className="relative min-h-0 flex-1">{showViewer ? <Viewer /> : <Browser />}</div>
+      <div className="relative min-h-0 flex-1">
+        {booted && (showViewer ? <Viewer /> : <Browser />)}
+      </div>
       <ContextMenu />
       <RenameDialog />
       <InfoDialog />

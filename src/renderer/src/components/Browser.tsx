@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowLeft,
   ArrowRight,
@@ -43,6 +43,7 @@ function NavBtn({
 
 export default function Browser(): React.JSX.Element {
   const currentDir = useStore((s) => s.currentDir)
+  const folders = useStore((s) => s.folders)
   const images = useStore((s) => s.images)
   const index = useStore((s) => s.index)
   const history = useStore((s) => s.history)
@@ -61,13 +62,40 @@ export default function Browser(): React.JSX.Element {
   const [thumbSize, setThumbSize] = useState(132)
   const [dims, setDims] = useState<{ w: number; h: number } | null>(null)
 
+  // The grid cell the user is on: the image they were just viewing (leaving the
+  // viewer remounts the browser), whatever they last clicked, or — right after
+  // going up a level — the folder they just came out of.
+  const [focusPath, setFocusPath] = useState<string | null>(() => images[index]?.path ?? null)
+  const lastDir = useRef(currentDir)
+  useEffect(() => {
+    if (lastDir.current === currentDir) return
+    setFocusPath(lastDir.current)
+    setQuery('') // the search is per folder
+    lastDir.current = currentDir
+  }, [currentDir])
+
   const segments = currentDir ? breadcrumbSegments(currentDir) : []
   const selected = images[index]
 
-  const visible = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    return q ? images.filter((im) => im.name.toLowerCase().includes(q)) : images
-  }, [images, query])
+  const q = query.trim().toLowerCase()
+  const visibleFolders = useMemo(
+    () => (q ? folders.filter((f) => f.name.toLowerCase().includes(q)) : folders),
+    [folders, q]
+  )
+  const visible = useMemo(
+    () => (q ? images.filter((im) => im.name.toLowerCase().includes(q)) : images),
+    [images, q]
+  )
+
+  const focusFolder = visibleFolders.find((f) => f.path === focusPath)
+  const selectedPath = focusFolder ? focusFolder.path : (selected?.path ?? null)
+  // Only scroll to a cell the user chose — never to the first image a folder
+  // opens on, which sits after its sub-folders and would scroll them out of view.
+  const revealPath = focusPath === selectedPath ? focusPath : null
+
+  const counts = folders.length
+    ? `${folders.length} 个文件夹${images.length ? ` · ${images.length} 张图片` : ''}`
+    : `${images.length} 张图片`
 
   // Fetch dimensions for the selected image (for the status bar).
   useEffect(() => {
@@ -162,7 +190,8 @@ export default function Browser(): React.JSX.Element {
                 {currentDir ? baseName(currentDir) : ''}
               </span>
               <span className="shrink-0 text-[12px]" style={{ color: 'var(--app-muted)' }}>
-                {images.length} 张图片{query && ` · 匹配 ${visible.length}`}
+                {counts}
+                {query && ` · 匹配 ${visibleFolders.length + visible.length}`}
               </span>
             </div>
             <div className="flex-1" />
@@ -185,12 +214,19 @@ export default function Browser(): React.JSX.Element {
           <div className="min-h-0 flex-1">
             {!currentDir ? (
               <EmptyState />
-            ) : visible.length ? (
+            ) : visibleFolders.length || visible.length ? (
+              // Keyed by folder: entering another one starts on a fresh grid, at the top.
               <ThumbGrid
+                key={currentDir}
+                folders={visibleFolders}
                 items={visible}
                 size={thumbSize}
-                selectedPath={selected?.path ?? null}
-                onSelect={(i) => setIndex(toReal(i))}
+                selectedPath={selectedPath}
+                revealPath={revealPath}
+                onSelect={(i) => {
+                  setIndex(toReal(i))
+                  setFocusPath(visible[i].path)
+                }}
                 onOpen={(i) => openImageAt(toReal(i))}
                 onContext={(i, e) => {
                   e.preventDefault()
@@ -198,6 +234,8 @@ export default function Browser(): React.JSX.Element {
                   setIndex(real)
                   openMenu(e.clientX, e.clientY, buildMenu(images[real], real))
                 }}
+                onSelectFolder={(f) => setFocusPath(f.path)}
+                onOpenFolder={(f) => go(f.path)}
               />
             ) : (
               <div
@@ -206,7 +244,7 @@ export default function Browser(): React.JSX.Element {
               >
                 <ImagesIcon size={40} strokeWidth={1.5} />
                 <span className="text-[13px]">
-                  {images.length ? '没有匹配的图片' : '此文件夹中没有图片'}
+                  {images.length || folders.length ? '没有匹配的图片' : '此文件夹中没有图片'}
                 </span>
               </div>
             )}
@@ -223,7 +261,15 @@ export default function Browser(): React.JSX.Element {
           color: 'var(--app-muted)'
         }}
       >
-        {selected ? (
+        {focusFolder ? (
+          <>
+            <span className="truncate" style={{ maxWidth: 320, color: 'var(--app-text)' }}>
+              {focusFolder.name}
+            </span>
+            <span>文件夹</span>
+            <span>{formatDate(focusFolder.mtime)}</span>
+          </>
+        ) : selected ? (
           <>
             <span className="truncate" style={{ maxWidth: 320, color: 'var(--app-text)' }}>
               {selected.name}
@@ -237,7 +283,7 @@ export default function Browser(): React.JSX.Element {
             </span>
           </>
         ) : (
-          <span>{images.length} 张图片</span>
+          <span>{counts}</span>
         )}
       </div>
     </div>

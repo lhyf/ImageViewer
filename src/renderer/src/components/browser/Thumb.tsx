@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { ImageOff } from 'lucide-react'
-import type { ImageItem } from '@shared/types'
+import { THUMB_SIZE, type ImageItem } from '@shared/types'
 import { mediaUrl } from '../../lib/util'
 
 interface ThumbProps {
@@ -33,7 +33,7 @@ export default function Thumb({
     setSrc(null)
     setError(false)
     window.api.image
-      .thumbnail(item.path, 384)
+      .thumbnail(item.path, THUMB_SIZE)
       .then((cachePath) => {
         if (alive.current) setSrc(mediaUrl(cachePath))
       })

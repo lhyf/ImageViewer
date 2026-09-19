@@ -1,9 +1,13 @@
 import { app, shell, BrowserWindow, ipcMain, protocol, net } from 'electron'
 import { join, resolve } from 'path'
-import { existsSync, statSync } from 'fs'
+import { existsSync, statSync, readFileSync, promises as fs } from 'fs'
 import { pathToFileURL } from 'url'
-import { registerFileHandlers } from './ipc'
+import { registerFileHandlers, prefetch } from './ipc'
 import { endDecode } from './decode'
+import { readSharpAhead } from './sharp'
+
+// Get libvips read while Electron is still starting up (see sharp.ts).
+readSharpAhead()
 
 const isMac = process.platform === 'darwin'
 const isDev = !!process.env['ELECTRON_RENDERER_URL']
@@ -42,6 +46,19 @@ function imagePathFromArgv(argv: string[]): string | null {
   return null
 }
 
+// The renderer's theme, mirrored here (see 'app:theme') so a new window can open
+// in the theme's background colour before any of the UI has loaded.
+const themeFile = (): string => join(app.getPath('userData'), 'theme')
+function windowBackground(): string {
+  let theme = 'dark'
+  try {
+    theme = readFileSync(themeFile(), 'utf8')
+  } catch {
+    /* never saved yet */
+  }
+  return theme === 'light' ? '#eceef1' : '#17181b' // --app-bg of each theme
+}
+
 function focusMainWindow(): void {
   if (!mainWindow) return
   if (mainWindow.isMinimized()) mainWindow.restore()
@@ -59,9 +76,11 @@ function openFileInRenderer(p: string): void {
   if (!mainWindow) {
     pendingFile = p
     createWindow()
+    prefetch(p)
     if (isMac) app.focus({ steal: true })
     return
   }
+  prefetch(p)
   const wc = mainWindow.webContents
   if (!wc.isLoading()) {
     wc.send('app:openFile', p)
@@ -84,8 +103,10 @@ function createWindow(): void {
     height: 800,
     minWidth: 820,
     minHeight: 560,
-    show: false,
-    backgroundColor: '#17181b',
+    // Shown at once, in the theme's background, rather than held back until the
+    // UI's first paint (ready-to-show): on a cold start, loading the UI is most
+    // of the wait, and it's better spent with the window already up.
+    backgroundColor: windowBackground(),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,
@@ -100,7 +121,6 @@ function createWindow(): void {
       : { ...common, frame: false }
   )
 
-  mainWindow.on('ready-to-show', () => mainWindow?.show())
   mainWindow.on('closed', () => {
     mainWindow = null
   })
@@ -147,6 +167,9 @@ function registerWindowControls(): void {
   })
   ipcMain.handle('window:close', () => mainWindow?.close())
   ipcMain.handle('window:isMaximized', () => mainWindow?.isMaximized() ?? false)
+  ipcMain.on('app:theme', (_e, theme: string) => {
+    fs.writeFile(themeFile(), theme).catch(() => {})
+  })
 
   // The renderer calls this once on boot to pick up a file the OS launched us
   // with (consumed exactly once).
@@ -177,6 +200,8 @@ if (!gotSingleInstanceLock) {
     registerWindowControls()
     registerFileHandlers(() => mainWindow)
     createWindow()
+    // With the window on its way, start on the image while the UI loads.
+    if (pendingFile) prefetch(pendingFile)
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow()

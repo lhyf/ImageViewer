@@ -1,4 +1,4 @@
-import type { ImageItem, SortSpec } from '@shared/types'
+import type { FolderItem, ImageItem, SortSpec } from '@shared/types'
 
 /** Build a URL the custom `media://` protocol can serve. */
 export function mediaUrl(path: string): string {
@@ -10,6 +10,13 @@ export function dirName(p: string): string {
   const norm = p.replace(/[\\/]+$/, '')
   const i = Math.max(norm.lastIndexOf('/'), norm.lastIndexOf('\\'))
   return i > 0 ? norm.slice(0, i) : norm
+}
+
+/** Whether `p` lies somewhere beneath the folder `dir` (not `dir` itself). */
+export function isUnder(p: string, dir: string): boolean {
+  const base = dir.replace(/[\\/]+$/, '')
+  const sep = p[base.length]
+  return p.length > base.length + 1 && (sep === '\\' || sep === '/') && p.startsWith(base)
 }
 
 export function baseName(p: string): string {
@@ -79,4 +86,16 @@ export function sortImages(images: ImageItem[], sort: SortSpec): ImageItem[] {
     return r * dir
   })
   return arr
+}
+
+/** Folders follow the image sort's direction: by date when sorting by date, else by name. */
+export function sortFolders(folders: FolderItem[], sort: SortSpec): FolderItem[] {
+  const dir = sort.asc ? 1 : -1
+  return [...folders].sort(
+    (a, b) =>
+      dir *
+      (sort.key === 'date'
+        ? a.mtime - b.mtime
+        : a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }))
+  )
 }

@@ -1,10 +1,12 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type {
   ScanResult,
+  FolderPeek,
   DirNode,
   ImageMeta,
   OpResult,
-  RenameResult
+  RenameResult,
+  ThemeName
 } from '../shared/types'
 
 const api = {
@@ -22,7 +24,9 @@ const api = {
       const handler = (_e: unknown, p: string): void => cb(p)
       ipcRenderer.on('app:openFile', handler)
       return () => ipcRenderer.removeListener('app:openFile', handler)
-    }
+    },
+    // Lets the next launch open its window in this theme's colour.
+    setTheme: (theme: ThemeName): void => ipcRenderer.send('app:theme', theme)
   },
 
   window: {
@@ -44,6 +48,7 @@ const api = {
 
   fs: {
     scanDir: (dir: string): Promise<ScanResult> => ipcRenderer.invoke('fs:scanDir', dir),
+    peekDir: (dir: string): Promise<FolderPeek> => ipcRenderer.invoke('fs:peekDir', dir),
     treeRoots: (): Promise<DirNode[]> => ipcRenderer.invoke('fs:treeRoots'),
     childDirs: (dir: string): Promise<DirNode[]> => ipcRenderer.invoke('fs:childDirs', dir),
     quickAccess: (): Promise<DirNode[]> => ipcRenderer.invoke('fs:quickAccess'),

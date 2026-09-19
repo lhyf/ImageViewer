@@ -5,11 +5,14 @@ import { pathToFileURL } from 'url'
 import { createHash } from 'crypto'
 import { exec } from 'child_process'
 import os from 'os'
-import sharp from 'sharp'
 import exifr from 'exifr'
 import { loadImage, imageSize, exifToolTags, needsDecode, RAW_EXTS, HEIC_EXTS } from './decode'
+import { loadSharp } from './sharp'
+import { THUMB_SIZE } from '../shared/types'
 import type {
   ImageItem,
+  FolderItem,
+  FolderPeek,
   DirNode,
   ScanResult,
   ImageMeta,
@@ -35,6 +38,15 @@ function isImage(name: string): boolean {
   return IMAGE_EXTS.has(extOf(name))
 }
 
+/** A sub-folder worth listing: skips dot-folders and Windows system ones ($Recycle.Bin, …). */
+function isListedDir(e: import('fs').Dirent): boolean {
+  return e.isDirectory() && !e.name.startsWith('.') && !e.name.startsWith('$')
+}
+
+// Same collation as the renderer's name sort, so a folder's cover is the first
+// image listed inside it.
+const byName = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' })
+
 type GetWindow = () => BrowserWindow | null
 
 // ---------------------------------------------------------------------------
@@ -46,8 +58,15 @@ async function scanDir(dir: string): Promise<ScanResult> {
   try {
     entries = await fs.readdir(dir, { withFileTypes: true })
   } catch {
-    return { dir, images: [] }
+    return { dir, folders: [], images: [] }
   }
+
+  const folders: FolderItem[] = await Promise.all(
+    entries.filter(isListedDir).map(async (e) => {
+      const full = join(dir, e.name)
+      return { path: full, name: e.name, mtime: await fileMtime(full) }
+    })
+  )
 
   const files = entries.filter((e) => e.isFile() && isImage(e.name))
   const images: ImageItem[] = await Promise.all(
@@ -65,7 +84,22 @@ async function scanDir(dir: string): Promise<ScanResult> {
       return { path: full, name: e.name, ext: extOf(e.name), size, mtime }
     })
   )
-  return { dir, images }
+  return { dir, folders, images }
+}
+
+// Only a listing — no stat per file, no decode — so a grid of folder tiles stays
+// cheap; each tile asks for this lazily, only once it scrolls into view.
+async function peekDir(dir: string): Promise<FolderPeek> {
+  let names: string[]
+  try {
+    const entries = await fs.readdir(dir, { withFileTypes: true })
+    names = entries.filter((e) => e.isFile() && isImage(e.name)).map((e) => e.name)
+  } catch {
+    return { count: 0, cover: null }
+  }
+  let first: string | null = null
+  for (const n of names) if (first === null || byName.compare(n, first) < 0) first = n
+  return { count: names.length, cover: first === null ? null : join(dir, first) }
 }
 
 async function hasSubDir(dir: string): Promise<boolean> {
@@ -84,9 +118,7 @@ async function childDirs(dir: string): Promise<DirNode[]> {
   } catch {
     return []
   }
-  const dirs = entries.filter(
-    (e) => e.isDirectory() && !e.name.startsWith('.') && !e.name.startsWith('$')
-  )
+  const dirs = entries.filter(isListedDir)
   const nodes = await Promise.all(
     dirs.map(async (e) => {
       const full = join(dir, e.name)
@@ -162,8 +194,8 @@ async function ensureDir(dir: string): Promise<void> {
 // a backlog of THUMBNAIL jobs. They used to share one FIFO queue, so opening a
 // big folder of RAW/JPEG files left the main image spinning until every visible
 // thumbnail had finished generating. Each sharp op is kept single-threaded
-// (concurrency 1) so at most (thumb + preview) lane slots are busy at once.
-sharp.concurrency(1)
+// (concurrency 1, set in sharp.ts) so at most (thumb + preview) lane slots are
+// busy at once.
 
 interface Lane {
   run<T>(task: () => Promise<T>): Promise<T>
@@ -268,6 +300,7 @@ async function isAnimated(path: string): Promise<boolean> {
   if (ext === 'gif') {
     // libvips reports the frame count as `pages` for GIF.
     try {
+      const sharp = await loadSharp()
       const m = await sharp(path, { animated: true }).metadata()
       return (m.pages ?? 1) > 1
     } catch {
@@ -567,6 +600,27 @@ async function printImage(path: string): Promise<OpResult> {
 }
 
 // ---------------------------------------------------------------------------
+// Launch warm-up
+// ---------------------------------------------------------------------------
+
+// A folder scan started before the renderer asked for it (see prefetch).
+let warmScan: { dir: string; scan: Promise<ScanResult> } | null = null
+
+/**
+ * Get a head start on an image the app is opened with: list its folder and
+ * render its placeholder and full preview while the window's UI is still
+ * loading, instead of only once the viewer asks. The viewer's own requests then
+ * join that work — `cached()` shares generation already in flight — or find it
+ * done.
+ */
+export function prefetch(path: string): void {
+  const dir = dirname(path)
+  warmScan = { dir, scan: scanDir(dir) }
+  thumbnail(path, THUMB_SIZE).catch(() => {})
+  preview(path).catch(() => {})
+}
+
+// ---------------------------------------------------------------------------
 // Registration
 // ---------------------------------------------------------------------------
 
@@ -588,7 +642,13 @@ export function registerFileHandlers(getWindow: GetWindow): void {
     return r.canceled ? [] : r.filePaths
   })
 
-  ipcMain.handle('fs:scanDir', (_e, dir: string) => scanDir(dir))
+  ipcMain.handle('fs:scanDir', (_e, dir: string) => {
+    // The warm scan is only good for the renderer's first scan; later ones must be fresh.
+    const warm = warmScan
+    warmScan = null
+    return warm?.dir === dir ? warm.scan : scanDir(dir)
+  })
+  ipcMain.handle('fs:peekDir', (_e, dir: string) => peekDir(dir))
   ipcMain.handle('fs:treeRoots', () => treeRoots())
   ipcMain.handle('fs:childDirs', (_e, dir: string) => childDirs(dir))
   ipcMain.handle('fs:quickAccess', () => quickAccess())

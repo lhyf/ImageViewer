@@ -1,5 +1,11 @@
 // Shared data contracts between the main process, preload bridge and renderer.
 
+/**
+ * Edge length of the thumbnail the grid, folder covers and the viewer's
+ * placeholder all share, so each image has a single cached one.
+ */
+export const THUMB_SIZE = 384
+
 /** A single image file discovered inside a folder. */
 export interface ImageItem {
   /** Absolute path on disk. */
@@ -24,9 +30,26 @@ export interface DirNode {
   isDrive?: boolean
 }
 
-/** Result of scanning a folder for images. */
+/** A sub-folder, listed in the grid ahead of the images so it can be entered. */
+export interface FolderItem {
+  path: string
+  name: string
+  /** Last-modified time in epoch milliseconds. */
+  mtime: number
+}
+
+/** What a sub-folder directly holds, for its grid tile. */
+export interface FolderPeek {
+  /** Number of images directly inside it. */
+  count: number
+  /** Its first image by name, shown as the folder's cover. */
+  cover: string | null
+}
+
+/** Result of scanning a folder: its sub-folders and its images. */
 export interface ScanResult {
   dir: string
+  folders: FolderItem[]
   images: ImageItem[]
 }
 

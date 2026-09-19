@@ -1,6 +1,6 @@
 import { create } from 'zustand'
-import type { ImageItem, SortSpec, ThemeName } from '@shared/types'
-import { dirName, sortImages } from './lib/util'
+import type { FolderItem, ImageItem, SortSpec, ThemeName } from '@shared/types'
+import { dirName, sortFolders, sortImages } from './lib/util'
 
 export type Mode = 'browser' | 'viewer'
 
@@ -8,6 +8,8 @@ interface AppState {
   mode: Mode
   theme: ThemeName
   currentDir: string | null
+  /** Sub-folders of currentDir, shown in the grid ahead of the images. */
+  folders: FolderItem[]
   images: ImageItem[]
   index: number
   sort: SortSpec
@@ -47,6 +49,7 @@ export const useStore = create<AppState>((set, get) => ({
   mode: 'browser',
   theme: savedTheme,
   currentDir: null,
+  folders: [],
   images: [],
   index: 0,
   sort: { key: 'name', asc: true },
@@ -62,7 +65,12 @@ export const useStore = create<AppState>((set, get) => ({
   },
   toggleTheme: () => get().setTheme(get().theme === 'dark' ? 'light' : 'dark'),
   setMode: (mode) => set({ mode }),
-  setSort: (sort) => set({ sort, images: sortImages(get().images, sort) }),
+  setSort: (sort) =>
+    set({
+      sort,
+      folders: sortFolders(get().folders, sort),
+      images: sortImages(get().images, sort)
+    }),
   setIndex: (index) => set({ index }),
 
   openFolderDialog: async () => {
@@ -111,6 +119,7 @@ export const useStore = create<AppState>((set, get) => ({
     }
     set({
       currentDir: dir,
+      folders: sortFolders(res.folders, get().sort),
       images,
       index,
       loading: false,

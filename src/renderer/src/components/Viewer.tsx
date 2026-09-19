@@ -18,6 +18,7 @@ import {
 import { useStore } from '../store'
 import { useUI } from '../useUI'
 import { useImageMenu } from '../hooks/useImageMenu'
+import { THUMB_SIZE } from '@shared/types'
 import { mediaUrl, formatBytes, formatDate } from '../lib/util'
 import Filmstrip from './viewer/Filmstrip'
 import { useElementSize } from '../hooks/useElementSize'
@@ -89,6 +90,7 @@ export default function Viewer(): React.JSX.Element {
 
   const tRef = useRef(t)
   tRef.current = t
+  const shownOne = useRef(false)
   const dispRef = useRef<{ w: number; h: number } | null>(null)
   const sizeRef = useRef(stageSize)
   sizeRef.current = stageSize
@@ -174,9 +176,11 @@ export default function Viewer(): React.JSX.Element {
     setT({ scale: 1, tx: 0, ty: 0, rot: 0 })
 
     // Cheap placeholder immediately. Use the SAME size the browser grid caches
-    // (384) so opening a photo you already saw in the grid is an instant cache
-    // hit — the blurred image shows at once instead of regenerating.
-    window.api.image.thumbnail(item.path, 384).then((p) => alive && setPlaceholder(mediaUrl(p)))
+    // (THUMB_SIZE) so opening a photo you already saw in the grid is an instant
+    // cache hit — the blurred image shows at once instead of regenerating.
+    window.api.image
+      .thumbnail(item.path, THUMB_SIZE)
+      .then((p) => alive && setPlaceholder(mediaUrl(p)))
 
     // Fetch the real dimensions right away (cheap — header/EXIF only, no full
     // decode). The placeholder is sized from these so a small image never flashes
@@ -184,7 +188,10 @@ export default function Viewer(): React.JSX.Element {
     window.api.image.size(item.path).then((s) => alive && setOrig({ w: s.width, h: s.height }))
 
     // Defer the expensive preview so images you scrub straight past don't flood
-    // sharp — only the image you settle on gets a full preview generated.
+    // sharp — only the image you settle on gets a full preview generated. The
+    // image the viewer opens on isn't being scrubbed past, so it goes at once.
+    const delay = shownOne.current ? 140 : 0
+    shownOne.current = true
     const timer = setTimeout(() => {
       if (!alive) return
       window.api.image.preview(item.path).then((p) => alive && setMainSrc(mediaUrl(p)))
@@ -199,7 +206,7 @@ export default function Viewer(): React.JSX.Element {
           })
           .catch(() => {})
       })
-    }, 140)
+    }, delay)
 
     return () => {
       alive = false

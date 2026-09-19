@@ -23,12 +23,15 @@ bloat of an editing suite.
 
 ### Library (browse) mode
 
-- Folder tree on the left — quick-access shortcuts plus drives, expanded lazily.
+- Folder tree on the left — quick-access shortcuts plus drives, expanded lazily;
+  it opens up to follow whichever folder you're browsing.
 - **Drag & drop** a photo — or a folder — onto the window to open it and jump
   straight into its folder.
 - Breadcrumb path with back / forward / up / refresh navigation.
 - Virtualized thumbnail grid (smooth with thousands of files); thumbnails are
   generated once and cached.
+- Sub-folders are listed in the grid ahead of the images — each shows its first
+  image as a cover plus an image count — and open with a double-click.
 - Adjustable thumbnail size — the slider only re-lays-out, it never re-generates.
 - Sort by name / date / size / type, ascending or descending.
 - In-folder search and a status bar (name · dimensions · size · date · index).

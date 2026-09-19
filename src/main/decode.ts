@@ -1,7 +1,8 @@
 import { promises as fs } from 'fs'
 import { extname } from 'path'
 import { cpus } from 'os'
-import sharp from 'sharp'
+import type { Sharp } from 'sharp'
+import { loadSharp } from './sharp'
 
 // ---------------------------------------------------------------------------
 // Decoding for formats the prebuilt `sharp` cannot handle on its own:
@@ -95,7 +96,7 @@ function orientationNum(v: unknown): number {
 }
 
 /** Apply an EXIF orientation to a raw (metadata-less) sharp pipeline. */
-function applyOrientation(p: sharp.Sharp, o: number): sharp.Sharp {
+function applyOrientation(p: Sharp, o: number): Sharp {
   switch (o) {
     case 2: return p.flop()
     case 3: return p.rotate(180)
@@ -139,8 +140,9 @@ async function rawEmbeddedJpeg(path: string): Promise<Buffer> {
  * / `.toFile()`. Standard formats and RAW previews auto-orient from EXIF via
  * `.rotate()`; HEIC is oriented explicitly since its buffer carries no EXIF.
  */
-export async function loadImage(path: string): Promise<sharp.Sharp> {
+export async function loadImage(path: string): Promise<Sharp> {
   const ext = extOf(path)
+  const sharp = await loadSharp()
 
   if (HEIC_EXTS.has(ext)) {
     const buf = await fs.readFile(path)
@@ -193,6 +195,7 @@ export async function imageSize(path: string): Promise<{ width: number; height: 
 
   // HEIC + standard: sharp can read container metadata even when it can't decode.
   try {
+    const sharp = await loadSharp()
     const m = await sharp(path, { failOn: 'none' }).metadata()
     let w = m.width ?? 0
     let h = m.height ?? 0
